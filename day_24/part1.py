@@ -34,13 +34,19 @@ class Grid():
         self.cycle_minute = None
 
     def array_from_input_string(self, input_string):
+        # Remove trailing newline / whitespace then split on lines.
+        split_input = input_string.rstrip().split(os.linesep)
+
+        # Map the character in each row to booleans.
         grid_as_lists = [
             list(map(self.character_transform, row_string))
-            for row_string in input_string.rstrip().split(os.linesep)
+            for row_string in split_input
         ]
 
         return np.array(grid_as_lists, dtype=np.bool)
 
+    # Could do this a different way (using truth value of == '#'), but
+    # this allows flexibility if I want to stop using bools.
     character_map = {'.': False, '#': True}
     inverse_character_map = invert_dict(character_map)
 
@@ -76,18 +82,29 @@ class Grid():
 
     @staticmethod
     def next_state(neighbourhood):
+        # Center is 3rd cell is 'neighbourhood', the rest are real neighbours.
         center = neighbourhood[2]
         num_bugs = np.count_nonzero(neighbourhood)
         if center:
+            # Since neighbourhood includes self we care about 2 bugs, ourselves
+            # and a neighbour.
             return num_bugs == 2
         else:
+            # The number here is just like the problem setting.
             return num_bugs == 1 or num_bugs == 2
 
     def step(self):
+        # Run this function over all grid locations to get the next state.
+        # Locations outside of the array are rightly treated as zero.
         self.array = generic_filter(
             self.array, function=self.next_state,
             footprint=self.footprint, mode='constant'
         )
+
+        # Do bookkeeping about how long has elapsed, keep a record that we've
+        # seen this state, and check if we're in a cycle. Could alternatively
+        # use a Counter on the hashes and check the max value to find the
+        # cycle.
         self.minutes_passed += 1
 
         if self.state_hash in self.visited_states:
@@ -101,6 +118,8 @@ class Grid():
 
     @property
     def biodiversity(self):
+        # Create the appropriate weight array (all powers of two up to grid
+        # size), multiply by it and sum up.
         grid_shape = self.array.shape
         exponents = np.arange(self.array.size).reshape(grid_shape)
 
@@ -109,21 +128,26 @@ class Grid():
         return np.sum(self.array * cell_coefficients)
 
 
-def run_evolution(grid):
-    print('Initial state:')
-    print(grid)
-    print()
-
-    for minute in count(1):
-        grid.step()
-        print(f'After {minute} minute(s)')
+def run_evolution(grid, quiet=False):
+    if not quiet:
+        print('Initial state:')
         print(grid)
         print()
 
+    def iterate():
+        grid.step()
+
+        if not quiet:
+            suffix = 's' if minute > 1 else ''
+            print(f'After {minute} minute{suffix}')
+            print(grid)
+            print()
+
+    for minute in count(1):
+        iterate()
+
         if grid.has_cycle:
-            print(f'Cycle at minute {grid.cycle_minute}')
-            print(f'Biodiversity is {grid.biodiversity}')
-            break
+            return
 
 
 def main():
@@ -134,7 +158,10 @@ def main():
 
     grid = Grid(input_string)
 
-    run_evolution(grid)
+    run_evolution(grid, quiet=False)
+
+    print(f'Cycle at minute {grid.cycle_minute}')
+    print(f'Biodiversity is {grid.biodiversity}')
 
 
 if __name__ == '__main__':
